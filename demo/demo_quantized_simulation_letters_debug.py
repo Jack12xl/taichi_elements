@@ -204,8 +204,8 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     np_material = np.ndarray((solver.n_particles[None],), dtype=np.int32)
     solver.copy_dynamic(np_material, solver.material)
 
-    np_pid = np.ndarray((solver.n_particles[None],), dtype=np.int32)
-    solver.copy_dynamic_nd(np_pid, solver.pid[phase])
+    # np_pid = np.ndarray((solver.n_particles[None],), dtype=np.int32)
+    # solver.copy_dynamic_nd(np_pid, solver.pid[phase])
 
     np_grid = solver.grid_v[phase].to_numpy()
     np.savez(save_dir,

@@ -6,11 +6,12 @@ from engine.mpm_solver import MPMSolver
 
 write_to_disk = False
 
-ti.init(arch=ti.cuda)  # Try to run on GPU
+ti.init(arch=ti.cuda,
+        device_memory_fraction=0.7)  # Try to run on GPU
 
 gui = ti.GUI("Taichi Elements", res=512, background_color=0x112F41)
 
-mpm = MPMSolver(res=(128, 128))
+mpm = MPMSolver(res=(128, 128), quant=False)  # 2d not support quant for now
 
 for i in range(3):
     mpm.add_cube(lower_corner=[0.2 + i * 0.1, 0.3 + i * 0.1],
