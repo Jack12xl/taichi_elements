@@ -31,7 +31,7 @@ def parse_args():
                         action='store_true',
                         help='Use thin letters')
     parser.add_argument('-o', '--out-dir', type=str, help='Output folder')
-    parser.add_argument('-i', '--state-dir', type=str, help='State folder to store the middle staet')
+    parser.add_argument('-i', '--state-dir', type=str, help='State folder to store the middle state')
     args = parser.parse_args()
     print(args)
     return args
@@ -46,7 +46,7 @@ write_to_disk = args.out_dir is not None
 ti.init(arch=ti.cuda,
         kernel_profiler=True,
         use_unified_memory=False,
-        device_memory_GB=8)
+        device_memory_GB=6)
 
 # max_num_particles = 235000000
 max_num_particles = 1e8
@@ -61,6 +61,7 @@ if write_to_disk:
     output_dir = args.out_dir
     os.makedirs(f'{output_dir}/particles')
     os.makedirs(f'{output_dir}/previews')
+    os.makedirs(f'{output_dir}/states')
     print("Writing 2D vis and binary particle data to folder", output_dir)
 else:
     output_dir = None
@@ -199,44 +200,59 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     :param save_dir:
     :return:
     """
+    particles = mpm.particle_info()  # particle information
+    # other meta data
     phase = solver.input_grid
 
-    np_material = np.ndarray((solver.n_particles[None],), dtype=np.int32)
-    solver.copy_dynamic(np_material, solver.material)
-
-    # np_pid = np.ndarray((solver.n_particles[None],), dtype=np.int32)
-    # solver.copy_dynamic_nd(np_pid, solver.pid[phase])
-
-    np_grid = solver.grid_v[phase].to_numpy()
     np.savez(save_dir,
              frame=frame,
              input_grid=phase,
-             pid=np_pid,
-             grid_v=np_grid,
-             p_material=np_material
+             **particles
              )
     print(f'save {frame}th frame to {save_dir}')
     return
 
 
+@ti.kernel
+def copyback_dynamic_nd(solver: ti.template(), np_x: ti.ext_arr(), input_x: ti.template()):
+    for i in range(solver.n_particles[None]):
+        for j in ti.static(range(solver.dim)):
+            # print(i, j)
+            input_x[i][j] = np_x[i, j]
+
+
+@ti.kernel
+def copyback_dynamic(solver: ti.template(), np_x: ti.ext_arr(), input_x: ti.template()):
+    for i in range(solver.n_particles[None]):
+        # print(i)
+        input_x[i] = np_x[i]
+
+
 def load_mpm_state(solver: MPMSolver, save_dir: str):
+    # load particle information
     state = np.load(save_dir)
+    resume_frame = state['frame']
     phase = state['input_grid']
-    frame = state['frame']
+
+    num_particle = state['position'].shape[0]
+    # assert(num_particle == )
+    print(f"we have {num_particle} particles !")
+    solver.n_particles[None] = num_particle
 
     solver.input_grid = phase
-    solver.pid[phase].from_numpy(state['pid'])
-    solver.grid_v[phase].from_numpy(state['grid_v'])
-    solver.material[phase].from_numpy(state['p_material'])
+    copyback_dynamic_nd(solver, state['position'], solver.x)
+    copyback_dynamic_nd(solver, state['velocity'], solver.v)
+    copyback_dynamic(solver, state['material'], solver.material)
+    copyback_dynamic(solver, state['color'], solver.color)
 
-    print(f'load {frame}th frame from {save_dir}!')
-    return frame
+    print(f'load {resume_frame}th frame from {save_dir}!')
+    return resume_frame
+
 
 start_frame = 0
 # load the state dict for debug
 if args.state_dir is not None:
     start_frame = load_mpm_state(mpm, args.state_dir)
-
 
 for frame in range(start_frame, args.frames):
     print(f'frame {frame}')
