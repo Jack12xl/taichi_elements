@@ -94,7 +94,7 @@ def load_mesh(fn, scale, offset):
 # Use 512 for final simulation/render
 # R = 256
 R = 128
-
+count = ti.field(ti.i32, shape=())
 mpm = MPMSolver(res=(R, R, R),
                 size=1,
                 unbounded=True,
@@ -192,6 +192,33 @@ def seed_bars(subframe):
                      translation=((i - 0.5) * 0.6 - 0.5, 1.1, 0.1))
 
 
+
+
+
+@ti.kernel
+def count_activate(grid: ti.template()):
+    for I in ti.grouped(grid):
+        ti.atomic_add(count[None], 1)
+
+@ti.kernel
+def copy_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(), solver:ti.template()):
+    """
+
+    :param np_idx:
+    :param np_val:
+    :param grid:
+    :return:
+    """
+    i = 0
+    if True:
+        for I in ti.grouped(grid):
+            print(i, I)
+            for d in ti.static(range(solver.dim)):
+                np_idx[i, d] = I[d]
+                np_val[i, d] = grid[I][d]
+            ti.atomic_add(i, 1)
+
+
 def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     """
     Save MPM middle state as a npz file
@@ -203,10 +230,18 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     particles = mpm.particle_info()  # particle information
     # other meta data
     phase = solver.input_grid
+    # save grid_v
+    count_activate(mpm.grid_v[phase])
+    print(f"we have {count[None]} nodes activated")
+    np_grid_idx = np.ndarray((count[None], mpm.dim), dtype=np.float32)
+    np_grid_val = np.ndarray((count[None], mpm.dim), dtype=np.float32)
+    copy_grid(np_grid_idx, np_grid_val, mpm.grid_v[phase], mpm)
 
     np.savez(save_dir,
              frame=frame,
              input_grid=phase,
+             grid_v_idx=np_grid_idx,
+             grid_v_val=np_grid_val,
              **particles
              )
     print(f'save {frame}th frame to {save_dir}')
@@ -252,7 +287,7 @@ def load_mpm_state(solver: MPMSolver, save_dir: str):
 start_frame = 0
 # load the state dict for debug
 if args.state_dir is not None:
-    start_frame = load_mpm_state(mpm, args.state_dir)
+    start_frame = load_mpm_state(mpm, args.state_dir) + 1
 
 for frame in range(start_frame, args.frames):
     print(f'frame {frame}')
@@ -262,9 +297,6 @@ for frame in range(start_frame, args.frames):
     else:
         frame_split = 1
 
-    if frame % args.state_fre == 0:
-        save_mpm_state(mpm, frame, f'{output_dir}/states/{frame:05d}.npz')
-
     for subframe in range(frame * frame_split, (frame + 1) * frame_split):
         if mpm.n_particles[None] < max_num_particles:
             if args.thin:
@@ -273,6 +305,10 @@ for frame in range(start_frame, args.frames):
                 seed_bars(subframe)
 
         mpm.step(1e-2 / frame_split, print_stat=True)
+
+    if frame % args.state_fre == 0:
+        save_mpm_state(mpm, frame, f'{output_dir}/states/{frame:05d}.npz')
+
     if with_gui and frame % 3 == 0:
         particles = mpm.particle_info()
         visualize(particles, frame, output_dir)
