@@ -192,16 +192,14 @@ def seed_bars(subframe):
                      translation=((i - 0.5) * 0.6 - 0.5, 1.1, 0.1))
 
 
-
-
-
 @ti.kernel
 def count_activate(grid: ti.template()):
     for I in ti.grouped(grid):
         ti.atomic_add(count[None], 1)
 
+
 @ti.kernel
-def copy_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(), solver:ti.template()):
+def copy_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(), solver: ti.template()):
     """
 
     :param np_idx:
@@ -210,13 +208,12 @@ def copy_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(), s
     :return:
     """
     i = 0
-    if True:
-        for I in ti.grouped(grid):
-            print(i, I)
-            for d in ti.static(range(solver.dim)):
-                np_idx[i, d] = I[d]
-                np_val[i, d] = grid[I][d]
-            ti.atomic_add(i, 1)
+    for I in ti.grouped(grid):
+        j = ti.atomic_add(i, 1)
+        # print(j, I)
+        for d in ti.static(range(solver.dim)):
+            np_idx[j, d] = I[d]
+            np_val[j, d] = grid[I][d]
 
 
 def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
@@ -263,6 +260,16 @@ def copyback_dynamic(solver: ti.template(), np_x: ti.ext_arr(), input_x: ti.temp
         input_x[i] = np_x[i]
 
 
+@ti.kernel
+def copyback_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(), solver: ti.template()):
+    num_active_cell = np_idx.shape[0]
+    for i in range(num_active_cell):
+        idx = ti.core_vec(*np_idx[i, :])
+        val = ti.core_vec(*np_val[i, :])
+        print(idx, val)
+        grid[idx] = val
+
+
 def load_mpm_state(solver: MPMSolver, save_dir: str):
     # load particle information
     state = np.load(save_dir)
@@ -279,6 +286,8 @@ def load_mpm_state(solver: MPMSolver, save_dir: str):
     copyback_dynamic_nd(solver, state['velocity'], solver.v)
     copyback_dynamic(solver, state['material'], solver.material)
     copyback_dynamic(solver, state['color'], solver.color)
+
+    copyback_grid(state['grid_v_idx'], state['grid_v_val'], solver.grid_v[phase], solver)
 
     print(f'load {resume_frame}th frame from {save_dir}!')
     return resume_frame
