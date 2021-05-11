@@ -215,6 +215,12 @@ def copy_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(), s
             np_idx[j, d] = I[d]
             np_val[j, d] = grid[I][d]
 
+@ti.kernel
+def copy_matrix(np_matrix: ti.ext_arr(), mt: ti.template(), solver: ti.template()):
+    for p in range(solver.n_particles[None]):
+        for j in ti.static(range(solver.dim)):
+            for k in ti.static(range(solver.dim)):
+                np_matrix[p, j, k] = mt[p][j, k]
 
 def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     """
@@ -224,15 +230,25 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     :param save_dir:
     :return:
     """
-    particles = mpm.particle_info()  # particle information
+    particles = solver.particle_info()  # particle information
     # other meta data
     phase = solver.input_grid
     # save grid_v
-    count_activate(mpm.grid_v[phase])
+    count_activate(solver.grid_v[phase])
     print(f"we have {count[None]} nodes activated")
-    np_grid_idx = np.ndarray((count[None], mpm.dim), dtype=np.float32)
-    np_grid_val = np.ndarray((count[None], mpm.dim), dtype=np.float32)
-    copy_grid(np_grid_idx, np_grid_val, mpm.grid_v[phase], mpm)
+    np_grid_idx = np.ndarray((count[None], solver.dim), dtype=np.float32)
+    np_grid_val = np.ndarray((count[None], solver.dim), dtype=np.float32)
+    copy_grid(np_grid_idx, np_grid_val, solver.grid_v[phase], solver)
+
+    # save deformation gradient
+    np_F = np.ndarray((solver.n_particles[None], solver.dim, solver.dim), dtype=np.float32)
+    copy_matrix(np_F, solver.F, solver)
+    particles['F'] = np_F
+
+    if mpm.support_plasticity:
+        np_j = np.ndarray((solver.n_particles[None], ), dtype=np.float32)
+        solver.copy_dynamic(np_j, solver.Jp)
+        particles['p_Jp'] = np_j
 
     np.savez(save_dir,
              frame=frame,
@@ -264,11 +280,23 @@ def copyback_dynamic(solver: ti.template(), np_x: ti.ext_arr(), input_x: ti.temp
 def copyback_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(), solver: ti.template()):
     num_active_cell = np_idx.shape[0]
     for i in range(num_active_cell):
-        idx = ti.core_vec(*np_idx[i, :])
-        val = ti.core_vec(*np_val[i, :])
-        print(idx, val)
-        grid[idx] = val
+        idx = []
+        val = []
+        for j in ti.static(range(solver.dim)):
+            idx.append(int(np_idx[i, j]))
+            val.append(np_val[i, j])
 
+        ti_idx = ti.Vector(idx)
+        ti_val = ti.Vector(val)
+        # print(idx, val)
+        grid[ti_idx] = ti_val
+
+@ti.kernel
+def copyback_matrix(np_matrix: ti.ext_arr(), mt: ti.template(), solver: ti.template()):
+    for p in range(solver.n_particles[None]):
+        for j in ti.static(range(solver.dim)):
+            for k in ti.static(range(solver.dim)):
+                mt[p][j, k] = np_matrix[p, j, k]
 
 def load_mpm_state(solver: MPMSolver, save_dir: str):
     # load particle information
@@ -286,6 +314,9 @@ def load_mpm_state(solver: MPMSolver, save_dir: str):
     copyback_dynamic_nd(solver, state['velocity'], solver.v)
     copyback_dynamic(solver, state['material'], solver.material)
     copyback_dynamic(solver, state['color'], solver.color)
+    copyback_matrix(state['F'], solver.F, solver)
+    if solver.support_plasticity:
+        copyback_dynamic(solver, state['p_Jp'], solver.Jp)
 
     copyback_grid(state['grid_v_idx'], state['grid_v_val'], solver.grid_v[phase], solver)
 
