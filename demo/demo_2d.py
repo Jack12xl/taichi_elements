@@ -11,7 +11,7 @@ ti.init(arch=ti.cuda,
 
 gui = ti.GUI("Taichi Elements", res=512, background_color=0x112F41)
 
-mpm = MPMSolver(res=(128, 128), quant=False)  # 2d not support quant for now
+mpm = MPMSolver(res=(128, 128), quant=False, use_g2p2g=False)  # 2d not support quant for now
 
 for i in range(3):
     mpm.add_cube(lower_corner=[0.2 + i * 0.1, 0.3 + i * 0.1],
