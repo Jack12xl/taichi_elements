@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument('-stateFre',
                         '--state-fre',
                         type=int,
-                        default=5,
+                        default=128,
                         help='frequency to store the middle state for debug')
     parser.add_argument('-t',
                         '--thin',
@@ -46,10 +46,10 @@ write_to_disk = args.out_dir is not None
 ti.init(arch=ti.cuda,
         kernel_profiler=True,
         use_unified_memory=False,
-        device_memory_GB=6)
+        device_memory_GB=10)
 
 # max_num_particles = 235000000
-max_num_particles = 1e8
+max_num_particles = 2e8
 if with_gui:
     gui = ti.GUI("MLS-MPM",
                  res=1024,
@@ -131,7 +131,8 @@ for d in [0, 2]:
                              friction=0.5)
 
 if args.thin:
-    scale = (0.02, 0.02, 0.02)
+    # scale = (0.02, 0.02, 0.02)
+    scale = (0.015, 0.015, 0.015)
 else:
     scale = (0.02, 0.02, 0.8)
 
@@ -172,11 +173,13 @@ def seed_letters(subframe):
     b = 255 if subframe // 2 % 3 == 2 else 128
     color = r * 65536 + g * 256 + b
     triangles = quantized if subframe % 2 == 0 else simulation
-    mpm.add_mesh(triangles=triangles,
-                 material=MPMSolver.material_elastic,
-                 color=color,
-                 velocity=(0, -2, 0),
-                 translation=((i - 0.5) * 0.6, 0, (2 - j) * 0.1))
+
+    for y in range(-4, 2):
+        mpm.add_mesh(triangles=triangles,
+                     material=MPMSolver.material_elastic,
+                     color=color,
+                     velocity=(0, -2, 0),
+                     translation=((i - 0.5) * 0.6, 0.1 * y, (2 - j) * 0.1))
 
 
 def seed_bars(subframe):
@@ -230,6 +233,8 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     :param save_dir:
     :return:
     """
+    if not solver.use_g2p2g:
+        raise NotImplementedError
     particles = solver.particle_info()  # particle information
     # other meta data
     phase = solver.input_grid
@@ -299,6 +304,8 @@ def copyback_matrix(np_matrix: ti.ext_arr(), mt: ti.template(), solver: ti.templ
                 mt[p][j, k] = np_matrix[p, j, k]
 
 def load_mpm_state(solver: MPMSolver, save_dir: str):
+    if not solver.use_g2p2g:
+        raise NotImplementedError
     # load particle information
     state = np.load(save_dir)
     resume_frame = state['frame']
@@ -349,11 +356,11 @@ for frame in range(start_frame, args.frames):
     if frame % args.state_fre == 0:
         save_mpm_state(mpm, frame, f'{output_dir}/states/{frame:05d}.npz')
 
-    if with_gui and frame % 3 == 0:
+    if with_gui and frame % 4 == 0:
         particles = mpm.particle_info()
         visualize(particles, frame, output_dir)
 
-    if write_to_disk:
+    if write_to_disk and frame % 4 == 0:
         mpm.write_particles(f'{output_dir}/particles/{frame:05d}.npz')
     print(f'Frame total time {time.time() - t:.3f}')
     print(f'Total running time {time.time() - start_t:.3f}')
