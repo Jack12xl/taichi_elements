@@ -194,7 +194,9 @@ class MPMSolver:
         sin_phi = math.sin(friction_angle)
         self.alpha = math.sqrt(2 / 3) * 2 * sin_phi / (3 - sin_phi)
 
-        self.particle = ti.root.dynamic(ti.i, max_num_particles, 2**23)
+        # an empirical chunk size is 1/10 expected particle number
+        chunk_size = 2**20 if self.dim == 2 else 2**23
+        self.particle = ti.root.dynamic(ti.i, max_num_particles, chunk_size)
 
         if self.quant:
             if not self.use_g2p2g:
@@ -544,14 +546,14 @@ class MPMSolver:
         center = list(center)
 
         @ti.kernel
-        def collide(t: ti.f32, dt: ti.f32):
-            for I in ti.grouped(self.grid_m):
+        def collide(t: ti.f32, dt: ti.f32, grid_v: ti.template()):
+            for I in ti.grouped(grid_v):
                 offset = I * self.dx - ti.Vector(center)
                 if offset.norm_sqr() < radius * radius:
                     if ti.static(surface == self.surface_sticky):
-                        self.grid_v[I] = ti.Vector.zero(ti.f32, self.dim)
+                        grid_v[I] = ti.Vector.zero(ti.f32, self.dim)
                     else:
-                        v = self.grid_v[I]
+                        v = grid_v[I]
                         normal = offset.normalized(1e-5)
                         normal_component = normal.dot(v)
 
@@ -562,7 +564,7 @@ class MPMSolver:
                             # Project out only inward normal component
                             v = v - normal * min(normal_component, 0)
 
-                        self.grid_v[I] = v
+                        grid_v[I] = v
 
         self.grid_postprocess.append(collide)
 
