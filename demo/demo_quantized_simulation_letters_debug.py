@@ -46,7 +46,7 @@ write_to_disk = args.out_dir is not None
 ti.init(arch=ti.cuda,
         kernel_profiler=True,
         use_unified_memory=False,
-        device_memory_GB=10)
+        device_memory_GB=9)
 
 # max_num_particles = 235000000
 max_num_particles = 2e8
@@ -204,7 +204,7 @@ def count_activate(grid: ti.template()):
 @ti.kernel
 def copy_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(), solver: ti.template()):
     """
-
+    save the sparse grid_v or grid_m
     :param np_idx:
     :param np_val:
     :param grid:
@@ -218,12 +218,14 @@ def copy_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(), s
             np_idx[j, d] = I[d]
             np_val[j, d] = grid[I][d]
 
+
 @ti.kernel
 def copy_matrix(np_matrix: ti.ext_arr(), mt: ti.template(), solver: ti.template()):
     for p in range(solver.n_particles[None]):
         for j in ti.static(range(solver.dim)):
             for k in ti.static(range(solver.dim)):
                 np_matrix[p, j, k] = mt[p][j, k]
+
 
 def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     """
@@ -251,7 +253,7 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     particles['F'] = np_F
 
     if mpm.support_plasticity:
-        np_j = np.ndarray((solver.n_particles[None], ), dtype=np.float32)
+        np_j = np.ndarray((solver.n_particles[None],), dtype=np.float32)
         solver.copy_dynamic(np_j, solver.Jp)
         particles['p_Jp'] = np_j
 
@@ -293,8 +295,8 @@ def copyback_grid(np_idx: ti.ext_arr(), np_val: ti.ext_arr(), grid: ti.template(
 
         ti_idx = ti.Vector(idx)
         ti_val = ti.Vector(val)
-        # print(idx, val)
         grid[ti_idx] = ti_val
+
 
 @ti.kernel
 def copyback_matrix(np_matrix: ti.ext_arr(), mt: ti.template(), solver: ti.template()):
@@ -302,6 +304,7 @@ def copyback_matrix(np_matrix: ti.ext_arr(), mt: ti.template(), solver: ti.templ
         for j in ti.static(range(solver.dim)):
             for k in ti.static(range(solver.dim)):
                 mt[p][j, k] = np_matrix[p, j, k]
+
 
 def load_mpm_state(solver: MPMSolver, save_dir: str):
     if not solver.use_g2p2g:

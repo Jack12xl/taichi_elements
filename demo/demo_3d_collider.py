@@ -10,11 +10,15 @@ if write_to_disk:
     os.makedirs('outputs', exist_ok=True)
 
 # Try to run on GPU
-ti.init(arch=ti.cuda)
+ti.init(arch=ti.cuda, device_memory_GB=2.0)
 
 gui = ti.GUI("Taichi Elements", res=512, background_color=0x112F41)
 
-mpm = MPMSolver(res=(64, 64, 64), size=1)
+mpm = MPMSolver(res=(64, 64, 64),
+                size=1,
+                quant=False,
+                use_g2p2g=False
+                )
 
 mpm.set_gravity((0, -20, 0))
 
