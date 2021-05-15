@@ -94,7 +94,7 @@ class MPMSolver:
         # deformation gradient
 
         if quant:
-            assert self.dim == 3
+            # assert self.dim == 3
             ci21 = ti.type_factory.custom_int(21, True)
             cft = ti.type_factory.custom_float(significand_type=ci21,
                                                scale=1 / (2**19))
@@ -206,16 +206,26 @@ class MPMSolver:
             self.particle.bit_struct(num_bits=64).place(self.x)
             self.particle.bit_struct(num_bits=64).place(self.v,
                                                         shared_exponent=True)
-            self.particle.bit_struct(num_bits=32).place(
-                self.F(0, 0), self.F(0, 1))
-            self.particle.bit_struct(num_bits=32).place(
-                self.F(0, 2), self.F(1, 0))
-            self.particle.bit_struct(num_bits=32).place(
-                self.F(1, 1), self.F(1, 2))
-            self.particle.bit_struct(num_bits=32).place(
-                self.F(2, 0), self.F(2, 1))
-            self.particle.bit_struct(num_bits=32).place(
-                self.F(2, 2), self.material)
+
+            if self.dim == 3:
+                self.particle.bit_struct(num_bits=32).place(
+                    self.F(0, 0), self.F(0, 1))
+                self.particle.bit_struct(num_bits=32).place(
+                    self.F(0, 2), self.F(1, 0))
+                self.particle.bit_struct(num_bits=32).place(
+                    self.F(1, 1), self.F(1, 2))
+                self.particle.bit_struct(num_bits=32).place(
+                    self.F(2, 0), self.F(2, 1))
+                self.particle.bit_struct(num_bits=32).place(
+                    self.F(2, 2), self.material)
+
+            else:
+                assert(self.dim == 2)
+                self.particle.bit_struct(num_bits=32).place(
+                    self.F(0, 0), self.F(0, 1))
+                self.particle.bit_struct(num_bits=32).place(
+                    self.F(1, 0), self.F(1, 1))
+                self.particle.bit_struct(num_bits=32).place(self.material)
             self.particle.place(self.color)
         else:
             self.particle.place(self.x, self.v, self.F, self.material,
