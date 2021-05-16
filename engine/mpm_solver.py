@@ -193,7 +193,7 @@ class MPMSolver:
         sin_phi = math.sin(friction_angle)
         self.alpha = math.sqrt(2 / 3) * 2 * sin_phi / (3 - sin_phi)
 
-        # an empirical chunk size is 1/10 expected particle number
+        # An empirically optimal chunk size is 1/10 of the expected particle number
         chunk_size = 2**20 if self.dim == 2 else 2**23
         self.particle = ti.root.dynamic(ti.i, max_num_particles, chunk_size)
 
@@ -217,9 +217,8 @@ class MPMSolver:
                     self.F(2, 0), self.F(2, 1))
                 self.particle.bit_struct(num_bits=32).place(
                     self.F(2, 2), self.material)
-
             else:
-                assert(self.dim == 2)
+                assert self.dim == 2
                 self.particle.bit_struct(num_bits=32).place(
                     self.F(0, 0), self.F(0, 1))
                 self.particle.bit_struct(num_bits=32).place(
