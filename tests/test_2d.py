@@ -4,8 +4,8 @@ import math
 from engine import mpm_solver
 
 ti.init(arch=ti.cuda,
-        device_memory_GB=1.0,)  # Try to run on GPU
-mpm = mpm_solver.MPMSolver(res=(24, 24), use_g2p2g=False)
+        device_memory_GB=1.0)  # Try to run on GPU
+mpm = mpm_solver.MPMSolver(res=(24, 24))
 
 for frame in range(5):
     mpm.step(8e-3)

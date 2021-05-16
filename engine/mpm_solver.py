@@ -94,7 +94,6 @@ class MPMSolver:
         # deformation gradient
 
         if quant:
-            # assert self.dim == 3
             ci21 = ti.type_factory.custom_int(21, True)
             cft = ti.type_factory.custom_float(significand_type=ci21,
                                                scale=1 / (2**19))
