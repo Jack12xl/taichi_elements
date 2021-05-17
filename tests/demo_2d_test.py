@@ -25,7 +25,7 @@ ti.init(arch=ti.cuda)  # Try to run on GPU
 gui = ti.GUI("Taichi Elements", res=512, background_color=0x112F41)
 
 F_max = ti.field(dtype=ti.f32, shape=())
-mpm = MPMSolver(res=(128, 128), quant=True, use_g2p2g=False)
+mpm = MPMSolver(res=(128, 128), quant=True, use_g2p2g=False, support_plasticity=True)
 
 
 @ti.kernel
