@@ -126,10 +126,7 @@ class MPMSolver:
         self.color = ti.field(dtype=ti.i32)
         # plastic deformation volume ratio
         if self.support_plasticity:
-            if self.quant:
-                self.Jp = ti.field(dtype=ti.quant.fixed(frac=23, range=2))
-            else:
-                self.Jp = ti.field(dtype=ti.f32)
+            self.Jp = ti.field(dtype=ti.f32)
 
         if self.dim == 2:
             indices = ti.ij
@@ -202,7 +199,7 @@ class MPMSolver:
             if not self.use_g2p2g:
                 self.particle.place(self.C)
             if self.support_plasticity:
-                self.particle.bit_struct(num_bits=32).place(self.Jp)
+                self.particle.place(self.Jp)
             self.particle.bit_struct(num_bits=64).place(self.x)
             self.particle.bit_struct(num_bits=64).place(self.v,
                                                         shared_exponent=True)
