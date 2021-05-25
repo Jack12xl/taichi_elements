@@ -172,10 +172,13 @@ class MPMSolver:
                 block_component(v)
 
             self.pid.append(pid)
+            # TODO ? why
+            block_offset = tuple(o // self.leaf_block_size for o in self.offset)
             block.dynamic(ti.indices(self.dim),
                           1024 * 1024,
                           chunk_size=self.leaf_block_size ** self.dim * 8).place(
-                pid, offset=offset + (0,))
+                pid, offset=block_offset + (0,))
+
 
         self.padding = padding
 
@@ -295,11 +298,13 @@ class MPMSolver:
         return sigma_out
 
     @ti.kernel
-    def build_pid(self, pid: ti.template(), offset: ti.template()):
+    def build_pid(self, pid: ti.template(), grid_m: ti.template(), offset: ti.template()):
         ti.block_dim(64)
         for p in self.x:
-            base = int(ti.floor(self.x[p] * self.inv_dx - offset))
-            ti.append(pid.parent(), base - ti.Vector(list(self.offset)), p)
+            base = int(ti.floor(self.x[p] * self.inv_dx - 0.5)) \
+                 - ti.Vector(list(self.offset))
+            base_pid = ti.rescale_index(grid_m, pid, base)
+            ti.append(pid.parent(), base_pid, p)
 
     @ti.kernel
     def g2p2g(self, dt: ti.f32, pid: ti.template(), grid_v_in: ti.template(),
@@ -314,8 +319,9 @@ class MPMSolver:
             p = pid[I]
             # G2P
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
+            Im = ti.rescale_index(pid, grid_m_out, I)
             for D in ti.static(range(self.dim)):
-                base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
+                base[D] = ti.assume_in_range(base[D], Im[D], 0, 1)
             fx = self.x[p] * self.inv_dx - base.cast(float)
             w = [
                 0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1.0) ** 2, 0.5 * (fx - 0.5) ** 2
@@ -348,7 +354,7 @@ class MPMSolver:
             # P2G
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             for D in ti.static(range(self.dim)):
-                base[D] = ti.assume_in_range(base[D], I[D], -1, 2)
+                base[D] = ti.assume_in_range(base[D], Im[D], -1, 2)
 
             fx = self.x[p] * self.inv_dx - base.cast(float)
             # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
@@ -438,6 +444,7 @@ class MPMSolver:
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             for D in ti.static(range(self.dim)):
+              # for block shared memory: hint compiler with connection between loop range and actual loop element
                 base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
 
             fx = self.x[p] * self.inv_dx - base.cast(float)
@@ -631,8 +638,9 @@ class MPMSolver:
         for I in ti.grouped(self.pid):
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
+            Im = ti.rescale_index(self.pid, self.grid_m, I)
             for D in ti.static(range(self.dim)):
-                base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
+                base[D] = ti.assume_in_range(base[D], Im[D], 0, 1)
             fx = self.x[p] * self.inv_dx - base.cast(float)
             w = [
                 0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1.0) ** 2, 0.5 * (fx - 0.5) ** 2
@@ -678,7 +686,7 @@ class MPMSolver:
             if self.use_g2p2g:
                 output_grid = 1 - self.input_grid
                 self.grid[output_grid].deactivate_all()
-                self.build_pid(self.pid[self.input_grid], 0.5)
+                self.build_pid(self.pid[self.input_grid], self.grid_m[self.input_grid], 0.5)
                 self.g2p2g(dt, self.pid[self.input_grid],
                            self.grid_v[self.input_grid],
                            self.grid_v[output_grid], self.grid_m[output_grid])
