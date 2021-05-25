@@ -179,7 +179,6 @@ class MPMSolver:
                           chunk_size=self.leaf_block_size ** self.dim * 8).place(
                 pid, offset=block_offset + (0,))
 
-
         self.padding = padding
 
         # Young's modulus and Poisson's ratio
@@ -302,7 +301,7 @@ class MPMSolver:
         ti.block_dim(64)
         for p in self.x:
             base = int(ti.floor(self.x[p] * self.inv_dx - 0.5)) \
-                 - ti.Vector(list(self.offset))
+                   - ti.Vector(list(self.offset))
             base_pid = ti.rescale_index(grid_m, pid, base)
             ti.append(pid.parent(), base_pid, p)
 
@@ -443,9 +442,10 @@ class MPMSolver:
         for I in ti.grouped(self.pid):
             p = self.pid[I]
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
+            Im = ti.rescale_index(self.pid, self.grid_m, I)
             for D in ti.static(range(self.dim)):
-              # for block shared memory: hint compiler with connection between loop range and actual loop element
-                base[D] = ti.assume_in_range(base[D], I[D], 0, 1)
+                # for block shared memory: hint compiler with connection between loop range and actual loop element
+                base[D] = ti.assume_in_range(base[D], Im[D], 0, 1)
 
             fx = self.x[p] * self.inv_dx - base.cast(float)
             # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
@@ -699,7 +699,7 @@ class MPMSolver:
                 self.t += dt
             else:
                 self.grid.deactivate_all()
-                self.build_pid(self.pid, 0.5)
+                self.build_pid(self.pid, self.grid_m, 0.5)
                 self.p2g(dt)
                 self.grid_normalization_and_gravity(dt, self.grid_v,
                                                     self.grid_m)
