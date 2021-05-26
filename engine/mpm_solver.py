@@ -298,11 +298,19 @@ class MPMSolver:
 
     @ti.kernel
     def build_pid(self, pid: ti.template(), grid_m: ti.template(), offset: ti.template()):
+        """
+        grid has blocking(e.g. 4x4x4), we wish to put the particles from each block into a GPU block,
+        then used shared memory(ti.block_local) to accelerate
+        :param pid:
+        :param grid_m:
+        :param offset:
+        :return:
+        """
         ti.block_dim(64)
         for p in self.x:
             base = int(ti.floor(self.x[p] * self.inv_dx - 0.5)) \
                    - ti.Vector(list(self.offset))
-            base_pid = ti.rescale_index(grid_m, pid, base)
+            base_pid = ti.rescale_index(grid_m, pid.parent(2), base)
             ti.append(pid.parent(), base_pid, p)
 
     @ti.kernel
