@@ -299,8 +299,8 @@ class MPMSolver:
     @ti.kernel
     def build_pid(self, pid: ti.template(), grid_m: ti.template(), offset: ti.template()):
         """
-        grid has blocking(e.g. 4x4x4), we wish to put the particles from each block into a GPU block,
-        then used shared memory(ti.block_local) to accelerate
+        grid has blocking (e.g. 4x4x4), we wish to put the particles from each block into a GPU block,
+        then used shared memory (ti.block_local) to accelerate
         :param pid:
         :param grid_m:
         :param offset:
@@ -310,6 +310,7 @@ class MPMSolver:
         for p in self.x:
             base = int(ti.floor(self.x[p] * self.inv_dx - 0.5)) \
                    - ti.Vector(list(self.offset))
+            # pid grandparent is `block`
             base_pid = ti.rescale_index(grid_m, pid.parent(2), base)
             ti.append(pid.parent(), base_pid, p)
 
@@ -452,7 +453,7 @@ class MPMSolver:
             base = ti.floor(self.x[p] * self.inv_dx - 0.5).cast(int)
             Im = ti.rescale_index(self.pid, self.grid_m, I)
             for D in ti.static(range(self.dim)):
-                # for block shared memory: hint compiler with connection between loop range and actual loop element
+                # for block shared memory: hint compiler that there is a connection between `base` and loop index `I`
                 base[D] = ti.assume_in_range(base[D], Im[D], 0, 1)
 
             fx = self.x[p] * self.inv_dx - base.cast(float)
