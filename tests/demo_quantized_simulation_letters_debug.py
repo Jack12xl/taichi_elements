@@ -52,7 +52,7 @@ if with_gui:
     gui = ti.GUI("MLS-MPM",
                  res=1024,
                  background_color=0x112F41,
-                 show_gui=args.show)
+                 show_gui=False)
 
 if write_to_disk:
     # output_dir = create_output_folder(args.out_dir)
@@ -233,8 +233,6 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     :param save_dir:
     :return:
     """
-    if not solver.use_g2p2g:
-        raise NotImplementedError
     particles = solver.particle_info()  # particle information
     # other meta data
     phase = solver.input_grid
@@ -249,6 +247,11 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     np_F = np.ndarray((solver.n_particles[None], solver.dim, solver.dim), dtype=np.float32)
     copy_matrix(np_F, solver.F, solver)
     particles['F'] = np_F
+
+    if not solver.use_g2p2g:
+        np_C = np.ndarray((solver.n_particles[None], solver.dim, solver.dim), dtype=np.float32)
+        copy_matrix(np_C, solver.C, solver)
+        particles['C'] = np_C
 
     if mpm.support_plasticity:
         np_j = np.ndarray((solver.n_particles[None],), dtype=np.float32)
@@ -323,6 +326,8 @@ def load_mpm_state(solver: MPMSolver, save_dir: str):
     copyback_dynamic(solver, state['material'], solver.material)
     copyback_dynamic(solver, state['color'], solver.color)
     copyback_matrix(state['F'], solver.F, solver)
+    if not solver.use_g2p2g:
+        copyback_matrix(state['C'], solver.C, solver)
     if solver.support_plasticity:
         copyback_dynamic(solver, state['p_Jp'], solver.Jp)
 
