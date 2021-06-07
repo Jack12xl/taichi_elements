@@ -98,7 +98,7 @@ mpm = MPMSolver(res=(R, R, R),
                 unbounded=True,
                 dt_scale=1,
                 quant=True,
-                use_g2p2g=True,
+                use_g2p2g=False,
                 support_plasticity=False)
 
 mpm.add_surface_collider(point=(0, 0, 0),
@@ -234,24 +234,33 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
     :return:
     """
     particles = solver.particle_info()  # particle information
+    grids = {}
     # other meta data
-    phase = solver.input_grid
-    # save grid_v
-    count_activate(solver.grid_v[phase])
+    if not solver.use_g2p2g:
+        # save C
+        np_C = np.ndarray((solver.n_particles[None], solver.dim, solver.dim), dtype=np.float32)
+        copy_matrix(np_C, solver.C, solver)
+        particles['C'] = np_C
+
+        grid_v = solver.grid_v
+    else:
+        phase = solver.input_grid
+        # save grid_v
+        grid_v = solver.grid_v[phase]
+        grids['input_grid'] = phase
+    count_activate(grid_v)
     print(f"we have {count[None]} nodes activated")
     np_grid_idx = np.ndarray((count[None], solver.dim), dtype=np.float32)
     np_grid_val = np.ndarray((count[None], solver.dim), dtype=np.float32)
-    copy_grid(np_grid_idx, np_grid_val, solver.grid_v[phase], solver)
+    copy_grid(np_grid_idx, np_grid_val, grid_v, solver)
 
     # save deformation gradient
     np_F = np.ndarray((solver.n_particles[None], solver.dim, solver.dim), dtype=np.float32)
     copy_matrix(np_F, solver.F, solver)
     particles['F'] = np_F
 
-    if not solver.use_g2p2g:
-        np_C = np.ndarray((solver.n_particles[None], solver.dim, solver.dim), dtype=np.float32)
-        copy_matrix(np_C, solver.C, solver)
-        particles['C'] = np_C
+    grids['grid_v_idx'] = np_grid_idx
+    grids['grid_v_val'] = np_grid_val
 
     if mpm.support_plasticity:
         np_j = np.ndarray((solver.n_particles[None],), dtype=np.float32)
@@ -260,9 +269,7 @@ def save_mpm_state(solver: MPMSolver, frame: int, save_dir: str):
 
     np.savez(save_dir,
              frame=frame,
-             input_grid=phase,
-             grid_v_idx=np_grid_idx,
-             grid_v_val=np_grid_val,
+             **grids,
              **particles
              )
     print(f'save {frame}th frame to {save_dir}')
@@ -366,7 +373,7 @@ for frame in range(start_frame, args.frames):
         particles = mpm.particle_info()
         visualize(particles, frame, output_dir)
 
-    if write_to_disk and frame % 4 == 0:
+    if write_to_disk and frame % 256 == 0:
         mpm.write_particles(f'{output_dir}/particles/{frame:05d}.npz')
     print(f'Frame total time {time.time() - t:.3f}')
     print(f'Total running time {time.time() - start_t:.3f}')
